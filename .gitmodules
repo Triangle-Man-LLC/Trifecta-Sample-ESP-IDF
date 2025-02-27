@@ -1,0 +1,4 @@
+[submodule "components/Trifecta-Driver"]
+    path = components/Trifecta-Driver
+    url = https://github.com/Triangle-Man-LLC/Trifecta-Driver.git
+    branch = esp-idf

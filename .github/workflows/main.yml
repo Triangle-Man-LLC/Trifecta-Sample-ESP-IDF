@@ -1,0 +1,54 @@
+name: CI Build (ESP-IDF)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      
+jobs:
+  trifecta-sample-esp-idf:
+    runs-on: [self-hosted, ESP-IDF]
+    steps:
+      - name: Set up ESP-IDF environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget git flex bison gperf python3 python3-pip python3-setuptools cmake ninja-build ccache libffi-dev libssl-dev dfu-util
+          if [ ! -d "$HOME/esp-idf" ]; then
+            git clone --branch release/v5.3 --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
+            cd $HOME/esp-idf
+            ./install.sh
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true 
+
+      - name: Set ESP-IDF target platform 
+        run: |
+          . $HOME/esp-idf/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py set-target esp32s3
+
+      - name: Build with idf.py
+        run: |
+          . $HOME/esp-idf/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py build
+
+      - name: Cleanup build files
+        run: |
+          . $HOME/esp-idf/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py clean
+
+      - name: Mark build status
+        if: ${{ success() }}
+        run: echo "Build succeeded."
+
+      - name: Mark build status
+        if: ${{ failure() }}
+        run: echo "Build failed."
