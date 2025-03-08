@@ -16,6 +16,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y wget git flex bison gperf python3 python3-pip python3-setuptools cmake ninja-build ccache libffi-dev libssl-dev dfu-util
+          sudo apt-get install -y python3-pip-whl python3-setuptools-whl python3.12-venv       
           if [ ! -d "$HOME/esp-idf" ]; then
             git clone --branch release/v5.3 --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf
             cd $HOME/esp-idf
