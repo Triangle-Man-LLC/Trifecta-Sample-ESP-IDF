@@ -13,25 +13,16 @@
 static const char *TAG = "IMU_SERIAL_TEST";
 
 #define IMU_UART_NUM UART_NUM_1
-#define IMU_UART_BUF_SIZE 512
+#define IMU_UART_BUF_SIZE FS_MAX_DATA_LENGTH
 
-#define TXD_IMU_RX 18 // Labeled as "K1" on the IMU
-#define RXD_IMU_TX 26 // Labeled as "K2" on the IMU
+#define TXD_IMU_RX 41 // UART RX signal from IMU - Pin "K1"
+#define RXD_IMU_TX 42 // UART TX signal from IMU - Pin "K2"
 
-/// @brief Quaternion orientation of body relative to earth frame
-static fs_quaternion orientation_quaternion = {
-    .w = 1,
-    .x = 0,
-    .y = 0,
-    .z = 0,
-};
+/// @brief The IMU device handle
+static fs_device_info imu_device = {0};
 
-/// @brief Euler orientation of body relative to earth frame
-static fs_vector3 orientation_euler = {
-    .x = 0,
-    .y = 0,
-    .z = 0,
-};
+// The following config values are recommended for ESP32 devices.
+fs_driver_config imu_config = FS_DRIVER_CONFIG_DEFAULT;
 
 /// @brief Configure the UART interface.
 /// @return 0 on success
@@ -59,18 +50,20 @@ int setup_imu()
 {
     int status = -1;
 
-    // The following config values are recommended for ESP32 devices.
-    fs_driver_config imu_config;
-    imu_config.background_task_core_affinity = 1;
-    imu_config.background_task_priority = 2;
-    imu_config.read_timeout_micros = 2000;
-    imu_config.task_wait_ms = 2;
-    imu_config.task_stack_size_bytes = 8 * 1024;
-
     // Wait for connection to complete...
+    // fs_enable_logging(true);
+    // esp_log_level_set("*", ESP_LOG_VERBOSE);
+
+    vTaskDelay(100);
     while (status != 0)
     {
-        status = fs_initialize_serial(&imu_config, IMU_UART_NUM);
+        status = fs_set_driver_parameters(&imu_device, &imu_config);
+        if (status != 0)
+        {
+            ESP_LOGE(TAG, "Could not apply driver parameters!");
+        }
+
+        status = fs_initialize_serial(&imu_device, IMU_UART_NUM);
         ESP_LOGI(TAG, "Waiting for IMU connection!");
         vTaskDelay(1000);
     }
@@ -91,26 +84,28 @@ int app_main()
     const TickType_t delay_time = pdMS_TO_TICKS(5);
 
     uint32_t last_timestamp = 0;
-    
-    // Read measurements in a loop. 
+
+    // Read measurements in a loop.
+    static fs_quaternion orientation_quaternion = {.w = 1, .x = 0, .y = 0, .z = 0};
+    /// @brief Euler orientation of body relative to earth frame
+    static fs_vector3 orientation_euler = {.x = 0, .y = 0, .z = 0};
+
     while (1)
     {
-        fs_read_one_shot(); // Request a single read from the IMU.
+        fs_read_one_shot(&imu_device); // Request a single read from the IMU.
 
-        vTaskDelay(delay_time);
-
-        if(fs_get_last_timestamp(&last_timestamp) != 0)
+        if (fs_get_last_timestamp(&imu_device, &last_timestamp) != 0)
         {
             ESP_LOGE(TAG, "Failed to get packet time stamp!\n");
         }
-        
+
         // Orientation (quaternion) and orientation (euler) are 2 of the possible outputs that you can get from the IMU.
         // Please look at the functions in FS_Trifecta.h to see which other ones are available.
-        if (fs_get_orientation(&orientation_quaternion) != 0)
+        if (fs_get_orientation(&imu_device, &orientation_quaternion) != 0)
         {
             ESP_LOGE(TAG, "Did not receive orientation quaternion update for some reason!\n");
         }
-        if (fs_get_orientation_euler(&orientation_euler) != 0)
+        if (fs_get_orientation_euler(&imu_device, &orientation_euler, true) != 0)
         {
             ESP_LOGE(TAG, "Did not receive orientation euler update for some reason!\n");
         }
@@ -118,8 +113,9 @@ int app_main()
         // Log the data.
         // NOTE: Logging is CPU intensive, and you should consider turning it off in any case except debugging.
         ESP_LOGI(TAG, "Timestamp (%lu)\nQuaternion (%.6f, %.6f, %.6f, %.6f)\nEuler (%.2f, %.2f, %.2f)\n", last_timestamp,
-                orientation_quaternion.w, orientation_quaternion.x, orientation_quaternion.y, 
-                orientation_quaternion.z, orientation_euler.x, orientation_euler.y, orientation_euler.z);
+                 orientation_quaternion.w, orientation_quaternion.x, orientation_quaternion.y,
+                 orientation_quaternion.z, orientation_euler.x, orientation_euler.y, orientation_euler.z);
+        vTaskDelay(delay_time);
     }
     return 0;
 }
