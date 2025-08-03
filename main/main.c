@@ -51,9 +51,6 @@ int setup_imu()
     int status = -1;
 
     // Wait for connection to complete...
-    // fs_enable_logging(true);
-    // esp_log_level_set("*", ESP_LOG_VERBOSE);
-
     vTaskDelay(100);
     while (status != 0)
     {
@@ -69,6 +66,7 @@ int setup_imu()
     }
 
     ESP_LOGI(TAG, "Connected to IMU!");
+
     return status;
 }
 
@@ -80,19 +78,29 @@ int app_main()
     setup_uart();
     setup_imu();
 
+    // Start stream command turns on the device stream.
+    // An alternate way to read IMU data would be to use fs_read_one_shot(),
+    // but the stream mode is more suitable for real-time performance.
+    fs_start_stream(&imu_device);
+
     TickType_t last_wake_time = xTaskGetTickCount();
     const TickType_t delay_time = pdMS_TO_TICKS(5);
-
     uint32_t last_timestamp = 0;
 
-    // Read measurements in a loop.
+    /// @brief Quaternion orientation of body relative to earth frame
     static fs_quaternion orientation_quaternion = {.w = 1, .x = 0, .y = 0, .z = 0};
     /// @brief Euler orientation of body relative to earth frame
     static fs_vector3 orientation_euler = {.x = 0, .y = 0, .z = 0};
 
+    int counter = 0;
     while (1)
     {
-        fs_read_one_shot(&imu_device); // Request a single read from the IMU.
+        // It could be a good idea to set a keepalive signal
+        if (counter % 1000 == 0)
+        {    
+            fs_start_stream(&imu_device);
+        }
+        counter++;
 
         if (fs_get_last_timestamp(&imu_device, &last_timestamp) != 0)
         {
@@ -111,10 +119,11 @@ int app_main()
         }
 
         // Log the data.
-        // NOTE: Logging is CPU intensive, and you should consider turning it off in any case except debugging.
+        // NOTE: Logging is fairly CPU intensive, and you should consider turning it off in any case except debugging.
         ESP_LOGI(TAG, "Timestamp (%lu)\nQuaternion (%.6f, %.6f, %.6f, %.6f)\nEuler (%.2f, %.2f, %.2f)\n", last_timestamp,
                  orientation_quaternion.w, orientation_quaternion.x, orientation_quaternion.y,
                  orientation_quaternion.z, orientation_euler.x, orientation_euler.y, orientation_euler.z);
+        
         vTaskDelay(delay_time);
     }
     return 0;
