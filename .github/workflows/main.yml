@@ -53,6 +53,51 @@ jobs:
       - name: Mark build status
         if: ${{ failure() }}
         run: echo "Build failed."
+        
+  trifecta-sample-esp-32-p4:
+    runs-on: [self-hosted, ESP-IDF]
+    steps:
+      - name: Set up ESP-IDF environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget git flex bison gperf python3 python3-pip python3-setuptools cmake ninja-build ccache libffi-dev libssl-dev dfu-util
+          sudo apt-get install -y python3-pip-whl python3-setuptools-whl python3.12-venv       
+          if [ ! -d "$HOME/esp-idf-5_5" ]; then
+            git clone -b v5.5 --recursive https://github.com/espressif/esp-idf.git $HOME/esp-idf-5_5
+            cd $HOME/esp-idf-5_5
+            ./install.sh
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true 
+
+      - name: Set ESP-IDF target platform (ESP32-P4)
+        run: |
+          . $HOME/esp-idf-5_5/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py set-target esp32p4
+
+      - name: Build with idf.py
+        run: |
+          . $HOME/esp-idf-5_5/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py build
+
+      - name: Cleanup build files
+        run: |
+          . $HOME/esp-idf-5_5/export.sh
+          cd $GITHUB_WORKSPACE
+          idf.py clean
+
+      - name: Mark build status
+        if: ${{ success() }}
+        run: echo "Build succeeded."
+
+      - name: Mark build status
+        if: ${{ failure() }}
+        run: echo "Build failed."
 
   trifecta-sample-esp-32:
     runs-on: [self-hosted, ESP-IDF]
